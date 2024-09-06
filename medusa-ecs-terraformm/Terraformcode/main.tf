@@ -1,27 +1,88 @@
+# VPC
 resource "aws_vpc" "medusa_vpc" {
   cidr_block = "10.0.0.0/16"
 }
 
+# Subnet
 resource "aws_subnet" "public_subnet" {
   vpc_id            = aws_vpc.medusa_vpc.id
   cidr_block        = "10.0.1.0/24"
   availability_zone = "us-east-1a"
 }
 
-resource "aws_subnet" "private_subnet" {
-  vpc_id            = aws_vpc.medusa_vpc.id
-  cidr_block        = "10.0.2.0/24"
-  availability_zone = "us-east-1a"
-}
-
+# Internet Gateway
 resource "aws_internet_gateway" "medusa_igw" {
   vpc_id = aws_vpc.medusa_vpc.id
 }
 
+# Security Groups
+resource "aws_security_group" "ecs_sg" {
+  name   = "ecs_security_group"
+  vpc_id = aws_vpc.medusa_vpc.id
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+resource "aws_security_group" "alb_sg" {
+  name   = "alb_security_group"
+  vpc_id = aws_vpc.medusa_vpc.id
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+# IAM Role for ECS Task Execution
+resource "aws_iam_role" "ecs_task_execution_role" {
+  name = "ecs-task-execution-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action    = "sts:AssumeRole"
+        Effect    = "Allow"
+        Principal = {
+          Service = "ecs-tasks.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_task_execution_policy_attachment" {
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+  role     = aws_iam_role.ecs_task_execution_role.name
+}
+
+# ECS Cluster
 resource "aws_ecs_cluster" "medusa_cluster" {
   name = "medusa-cluster"
 }
 
+# ECS Task Definition
 resource "aws_ecs_task_definition" "medusa_task" {
   family                   = "medusa-task"
   network_mode             = "awsvpc"
@@ -45,6 +106,7 @@ resource "aws_ecs_task_definition" "medusa_task" {
   ])
 }
 
+# ECS Service
 resource "aws_ecs_service" "medusa_service" {
   name            = "medusa-service"
   cluster         = aws_ecs_cluster.medusa_cluster.id
@@ -58,6 +120,7 @@ resource "aws_ecs_service" "medusa_service" {
   }
 }
 
+# Application Load Balancer
 resource "aws_lb" "medusa_alb" {
   name               = "medusa-alb"
   internal           = false
@@ -68,10 +131,17 @@ resource "aws_lb" "medusa_alb" {
 
 resource "aws_lb_listener" "medusa_listener" {
   load_balancer_arn = aws_lb.medusa_alb.arn
-  port              = "80"
+  port              = 80
   protocol          = "HTTP"
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.medusa_tg.arn
   }
+}
+
+resource "aws_lb_target_group" "medusa_tg" {
+  name     = "medusa-tg"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.medusa_vpc.id
 }
