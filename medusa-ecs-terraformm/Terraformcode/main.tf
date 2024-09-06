@@ -120,15 +120,24 @@ resource "aws_ecs_service" "medusa_service" {
   }
 }
 
-# Application Load Balancer
+# Additional Subnet
+resource "aws_subnet" "public_subnet_2" {
+  vpc_id            = aws_vpc.medusa_vpc.id
+  cidr_block        = "10.0.2.0/24"
+  availability_zone = "us-east-1b"
+}
+
+# Load Balancer
 resource "aws_lb" "medusa_alb" {
   name               = "medusa-alb"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb_sg.id]
-  subnets            = [aws_subnet.public_subnet.id]
+  subnets            = [
+    aws_subnet.public_subnet.id,
+    aws_subnet.public_subnet_2.id
+  ]
 }
-
 resource "aws_lb_listener" "medusa_listener" {
   load_balancer_arn = aws_lb.medusa_alb.arn
   port              = 80
