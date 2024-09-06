@@ -82,7 +82,6 @@ resource "aws_ecs_cluster" "medusa_cluster" {
   name = "medusa-cluster"
 }
 
-# ECS Task Definition
 resource "aws_ecs_task_definition" "medusa_task" {
   family                   = "medusa-task"
   network_mode             = "awsvpc"
@@ -94,7 +93,7 @@ resource "aws_ecs_task_definition" "medusa_task" {
   container_definitions = jsonencode([
     {
       name  = "medusa-container"
-      image = "<ECR-Image-URL>"
+      image = "your-dockerhub-username/medusa-image:latest"  # Or correct ECR URL
       essential = true
       portMappings = [
         {
